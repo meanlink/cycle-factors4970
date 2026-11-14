@@ -15,8 +15,13 @@ def execute(job_id):
         if not j or j.status!='queued':return
         j.status='running'; db.commit()
         try:
-            d=db.get(Dataset,j.dataset_id)
-            result=analyze(d.records,j.params)
+            if j.samples is not None:
+                # Combination jobs carry their own resolved snapshot; do not
+                # re-read the (possibly revised) combination or its batches.
+                records=j.samples
+            else:
+                records=db.get(Dataset,j.dataset_id).records
+            result=analyze(records,j.params)
             json.dumps(result,allow_nan=False)
             j.result=result;j.status='completed';j.finished_at=time.time()
             record(db,'worker','job.completed',{'id':j.id})

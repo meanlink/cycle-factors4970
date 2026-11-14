@@ -3,8 +3,15 @@
 偏相关与滞后相关的真实业务分析小型项目。完整模拟客户、痛点、上下游、算法公式与一天工作剧本见 [BUSINESS.md](BUSINESS.md)。
 
 ## 模块与业务流程
-数据接入（JSON/CSV、字段验证、批次指纹）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
-三个贯穿全栈的实体：Dataset 数据批次、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery。
+数据接入（JSON/CSV、观测日期、字段验证、批次指纹）→ 按日期组合批次（同键去重、冲突选源、版本快照）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
+贯穿全栈的实体：Dataset 数据批次、Combination/CombinationVersion 日期组合与版本、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery。
+
+### 按日期组合批次
+- 组合由若干不可变批次组成，按 `observation_date` 合并；同一站点、同一日期、同一时段的重复观测只保留一份（`collapsed_rows` 记录被合并条数）。
+- 相同键在不同批次出现不同数值时，该键标记为冲突（含逐对来源特征值与字段差异）。冲突未全部选择来源的版本不发布，任务也不能引用它。
+- 每个来源选择绑定冲突指纹（`signature`）。批次变更导致冲突内容变化时，旧选择判为失效（`stale_resolutions`），不会被套用到新冲突，需重新选择。
+- 每次修改生成新的 `CombinationVersion`，样本、来源批次、冲突与指纹固化在版本内。提交任务时复制该版本样本，排队期间修改组合不影响正在运行的研究。
+- 分析按（站点、观测日期）分片配对，日末缺口不借用次日观测；版本号、样本指纹随结果、分发计划和归档 JSON 一并保留。
 
 ## 快速启动
 ```bash
@@ -19,7 +26,7 @@ docker compose exec -T backend python -m scripts.seed_demo
 |账号|密码|真实权限|
 |---|---|---|
 |admin@demo.local|Demo123!|接入、执行、批准、分发、暂停、读取与下载|
-|analyst@demo.local|Demo123!|接入、执行、读取与下载；不能批准或安排分发|
+|analyst@demo.local|Demo123!|接入、组合、执行、读取与下载；不能批准或安排分发|
 |viewer@demo.local|Demo123!|只读与下载|
 
 ## 技术与本地开发

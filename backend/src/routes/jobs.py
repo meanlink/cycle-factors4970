@@ -13,7 +13,9 @@ def listing(db=Depends(get_db),u=Depends(current_user)):
     return [job_dict(j) for j in db.scalars(select(Job).order_by(Job.id.desc()).limit(100))]
 @router.post('',status_code=201)
 def create(data:JobInput,db=Depends(get_db),u=Depends(can_write)):
-    j=jobs.create(db,data,u); record(db,u.email,'job.create',{'id':j.id,'params':j.params})
+    j=jobs.create(db,data,u); record(db,u.email,'job.create',{'id':j.id,'params':j.params,
+        'combination_id':j.combination_id,'combination_version_no':j.combination_version_no,
+        'sample_checksum':j.sample_checksum})
     db.commit(); jobs.enqueue(j.id); return job_dict(j)
 @router.get('/{id}')
 def detail(id:int,db=Depends(get_db),u=Depends(current_user)):
